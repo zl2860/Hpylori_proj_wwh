@@ -1,0 +1,155 @@
+---
+title: "1st_analysis"
+author: "Zongchao"
+date: "8/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ropls)
+library(klaR)
+```
+
+# Import & check data 
+
+```{r}
+# import
+ori_full_155 = read_csv("./data/菌有155个_ori-full.csv")
+ratio_full_155 = read_csv("./data/菌有155个_比值_full.csv")
+
+# simple check
+#skimr::skim(ori_full_155)
+#skimr::skim(ori_full_155)
+#sum(names(ori_full_155) != names(ratio_full_155)) # 0
+```
+
+
+# Data transformation
+
+```{r}
+# transformation
+data_transform = function(data = ori_full_155){
+# standardize
+standardize = function(x){
+  return((x-mean(x))/sd(x))
+}
+# 
+data[,6:160] = apply(log2(data[,6:160]), MARGIN = 2, standardize)
+return(data) # return log2-transformed and standardized data
+}
+
+ori_full_155_transformed = data_transform(ori_full_155)
+ratio_full_155_transformed = data_transform(ratio_full_155)
+```
+
+# Simple multiple test
+
+```{r}
+#ori_full_155_transformed
+#ratio_full_155_transformed
+
+p.list = NULL
+for (var in c(6:160)) {
+  p = t.test(ori_full_155_transformed[ori_full_155_transformed$group == 0, var], ori_full_155_transformed[ori_full_155_transformed$group == 1, var])
+  p.list[var-5] = p$p.value
+}
+
+p.list = NULL
+for (var in c(6:160)) {
+  p = t.test(ratio_full_155_transformed[ratio_full_155_transformed$group == 0, var], ratio_full_155_transformed[ratio_full_155_transformed$group == 1, var])
+  p.list[var-5] = p$p.value
+}
+
+t = names(ratio_full_155_transformed)[6:160][which(p.list < 0.05)]
+```
+
+
+# Linear discriminant analysis (LDA)
+
+## ORI
+
+```{r}
+library(caret)
+library(MASS)
+trRow = createDataPartition(y = ori_full_155_transformed$group, p = 0.7, list =F)
+lda.fit  = lda(factor(group) ~ ., data = ori_full_155_transformed[,c("group",t)], subset = trRow)
+plot(lda.fit)
+
+# visualize
+ori_plot_df_train = cbind(ori_full_155_transformed[trRow,]$group, as.matrix(ori_full_155_transformed[trRow,t]) %*% lda.fit$scaling) %>% data.frame()
+
+ori_plot_df_test = cbind(ori_full_155_transformed[-trRow,]$group, as.matrix(ori_full_155_transformed[-trRow,t]) %*% lda.fit$scaling) %>% data.frame()
+
+ori_plot_df_train %>%
+  mutate(ID = 1:nrow(ori_plot_df_train)) %>%
+  ggplot(aes(x = reorder(ID, LD1), y = LD1, fill = factor(V1))) +
+  geom_col() +
+  theme_bw() +
+  ggsci::scale_fill_lancet() +
+  ggtitle("LDA score")
+
+ori_plot_df_test %>%
+  mutate(ID = 1:nrow(ori_plot_df_test)) %>%
+  ggplot(aes(x = reorder(ID, LD1), y = LD1, fill = factor(V1))) +
+  geom_col() +
+  theme_bw() +
+  ggsci::scale_fill_lancet() +
+  ggtitle("LDA score")
+```
+
+## RATIO
+
+```{r}
+set.seed(12)
+trRow = createDataPartition(y = ratio_full_155_transformed$group, p = 0.7, list =F)
+lda.fit  = lda(factor(group) ~ ., data = ratio_full_155_transformed[,c(2,6:160)], subset = trRow)
+plot(lda.fit)
+
+
+# visualize
+ratio_plot_df_train = cbind(ratio_full_155_transformed[trRow,]$group, as.matrix(ratio_full_155_transformed[trRow,c(6:160)]) %*% lda.fit$scaling) %>% data.frame()
+
+ratio_plot_df_test = cbind(ratio_full_155_transformed[-trRow,]$group, as.matrix(ratio_full_155_transformed[-trRow,c(6:160)]) %*% lda.fit$scaling) %>% data.frame()
+
+ratio_plot_df_train %>%
+  mutate(ID = 1:nrow(ratio_plot_df_train)) %>%
+  ggplot(aes(x = reorder(ID, LD1), y = LD1, fill = factor(V1))) +
+  geom_col() +
+  theme_bw() +
+  ggsci::scale_fill_lancet() +
+  ggtitle("LDA score - training")
+
+ratio_plot_df_test %>%
+  mutate(ID = 1:nrow(ratio_plot_df_test)) %>%
+  ggplot(aes(x = reorder(ID, LD1), y = LD1, fill = factor(V1))) +
+  geom_col() +
+  theme_bw() +
+  ggsci::scale_fill_lancet() +
+  ggtitle("LDA score - testing")
+```
+
+
+# VAE
+
+## construct a VAE model 
+
+```{r}
+library(magrittr)
+library(keras)
+library(ruta)
+
+network =
+  input() +
+  dense(256, "tanh") +
+  variational_block(10, seed = 42) +
+  dense(256, "tanh") +
+  output("sigmoid")
+
+
+learner = autoencoder_variational(network, loss = "mean_squared_error")
+model = train(learner, ratio_full_155_transformed[trRow,], epochs = 300)
+autoencode(ratio_full_155_transformed[trRow,6:160], dim = 10)
+```
+
