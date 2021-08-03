@@ -1,22 +1,11 @@
----
-title: "1st_analysis"
-author: "Zongchao"
-date: "8/2/2021"
-output: 
-    github_document
----
+1st\_analysis
+================
+Zongchao
+8/2/2021
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
-library(ropls)
-library(klaR)
-library(sparseLDA)
-```
+# Import & check data
 
-# Import & check data 
-
-```{r, message=FALSE,warning=FALSE}
+``` r
 # import
 ori_full_155 = read_csv("./data/菌有155个_ori-full.csv")
 ratio_full_155 = read_csv("./data/菌有155个_比值_full.csv")
@@ -29,10 +18,9 @@ ratio_full_413 = read_csv("./data/413_比.csv")
 #sum(names(ori_full_155) != names(ratio_full_155)) # 0
 ```
 
-
 # Data transformation
 
-```{r}
+``` r
 # transformation
 data_transform = function(data = ori_full_155, trans_col = c(3:415)){
 # standardize
@@ -52,7 +40,7 @@ ratio_full_413_transformed = data_transform(ratio_full_413)
 
 # Simple multiple test
 
-```{r}
+``` r
 #ori_full_155_transformed
 #ratio_full_155_transformed
 
@@ -72,18 +60,33 @@ for (var in c(3:415)) {
 t_ratio_413 = names(ratio_full_413_transformed)[3:415][which(p.list < 0.05)]
 ```
 
-
 # Linear discriminant analysis (LDA)
 
 ## ORI
 
-```{r}
+``` r
 library(caret)
+```
+
+    ## Loading required package: lattice
+
+    ## 
+    ## Attaching package: 'caret'
+
+    ## The following object is masked from 'package:purrr':
+    ## 
+    ##     lift
+
+``` r
 library(MASS)
 trRow = createDataPartition(y = ori_full_413_transformed$group, p = 0.7, list =F)
 lda.fit  = lda(factor(group) ~ ., data = ori_full_413_transformed[,c("group",t_ori_413)], subset = trRow)
 plot(lda.fit)
+```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
 # visualize
 ori_plot_df_train = cbind(ori_full_413_transformed[trRow,]$group, as.matrix(ori_full_413_transformed[trRow,t_ori_413]) %*% lda.fit$scaling) %>% data.frame()
 
@@ -96,7 +99,11 @@ ori_plot_df_train %>%
   theme_bw() +
   ggsci::scale_fill_lancet() +
   ggtitle("LDA score")
+```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
+
+``` r
 ori_plot_df_test %>%
   mutate(ID = 1:nrow(ori_plot_df_test)) %>%
   ggplot(aes(x = reorder(ID, LD1), y = LD1, fill = factor(V1))) +
@@ -106,15 +113,20 @@ ori_plot_df_test %>%
   ggtitle("LDA score")
 ```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
 ## RATIO
 
-```{r}
+``` r
 set.seed(12)
 trRow = createDataPartition(y = ratio_full_413_transformed$group, p = 0.7, list =F)
 lda.fit  = lda(factor(group) ~ ., data = ratio_full_413_transformed[,c("group", t_ratio_413)], subset = trRow)
 plot(lda.fit)
+```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
+``` r
 # visualize
 ratio_plot_df_train = cbind(ratio_full_413_transformed[trRow,]$group, as.matrix(ratio_full_413_transformed[trRow,c(t_ratio_413)]) %*% lda.fit$scaling) %>% data.frame()
 
@@ -127,7 +139,11 @@ ratio_plot_df_train %>%
   theme_bw() +
   ggsci::scale_fill_lancet() +
   ggtitle("LDA score - training")
+```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
+
+``` r
 ratio_plot_df_test %>%
   mutate(ID = 1:nrow(ratio_plot_df_test)) %>%
   ggplot(aes(x = reorder(ID, LD1), y = LD1, fill = factor(V1))) +
@@ -136,22 +152,26 @@ ratio_plot_df_test %>%
   ggsci::scale_fill_lancet() +
   ggtitle("LDA score - testing") +
   ggtitle("LDA score for the test set")
+```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-5-3.png)<!-- -->
+
+``` r
 ratio_plot_df_test %>%
   ggplot(aes(x = factor(V1), y = LD1, fill = factor(V1))) +
   geom_boxplot() +
   ggsci::scale_fill_jco() +
   theme_bw() +
   ggtitle("LDA score for the test set") 
-  
 ```
 
+![](1st_analysis_files/figure-gfm/unnamed-chunk-5-4.png)<!-- -->
 
 # Sparse LDA
 
 结果不好，没用run
 
-```{r, eval=FALSE}
+``` r
 #x.sda = as.matrix(ratio_full_413_transformed[,-c(1,2)])
 x.sda = as.matrix(ratio_full_155_transformed[trRow,-c(1:5)])
 y.sda = factor(as.matrix(ratio_full_155_transformed[trRow,2]))
@@ -187,7 +207,3 @@ ratio_sda_plot_df_test %>%
 
 skimr::skim(ratio_full_413_transformed)
 ```
-
-
-
-
